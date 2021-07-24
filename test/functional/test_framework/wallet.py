@@ -177,4 +177,3 @@ class MiniWallet:
     def sendrawtransaction(self, *, from_node, tx_hex):
         from_node.sendrawtransaction(tx_hex)
         self.scan_tx(from_node.decoderawtransaction(tx_hex))
-        
