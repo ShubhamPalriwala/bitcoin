@@ -40,7 +40,6 @@ class MempoolLimitTest(BitcoinTestFramework):
         self.log.info('Create a mempool tx that will be evicted')
         txid = miniwallet.send_self_transfer(fee_rate = relayfee, from_node = node)['txid']
 
-        mempool_min_fee = node.getmempoolinfo()['mempoolminfee']
         base_fee = relayfee*1000
         for i in range (3):
             txids.append([])
@@ -55,17 +54,19 @@ class MempoolLimitTest(BitcoinTestFramework):
         assert_greater_than(node.getmempoolinfo()['mempoolminfee'], Decimal('0.00001000'))
 
         self.log.info('Create a mempool tx that will not pass mempoolminfee')
-        assert_raises_rpc_error(-26, "mempool min fee not met", miniwallet.send_self_transfer, from_node=node, fee_rate=relayfee)
+        assert_raises_rpc_error(-26, "mempool min fee not met", miniwallet.send_self_transfer, from_node=node, fee_rate=relayfee,mempool_valid=False)
 
     def create_large_transactions(self, node, txouts, miniwallet, num, fee):
         large_txids = []
-        for j in range(num):
-            hex = miniwallet.send_self_transfer(from_node=node, fee_rate=fee)['hex']
+        for _ in range(num):
+            hex = miniwallet.create_self_transfer(from_node=node, fee_rate=fee)['hex']
             tx = from_hex(CTransaction(), hex)
             tx.vout.extend(txouts)
             tx_hex = tx.serialize().hex()
-            txid = node.sendrawtransaction(tx_hex, 0)
-            large_txids.append(txid)
+            miniwallet.sendrawtransaction(from_node=self.nodes[0], tx_hex=tx_hex)
+            for utxo in miniwallet.get_all_utxos():
+                large_txids.append(utxo)
+
         return large_txids
 
 if __name__ == '__main__':
