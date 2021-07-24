@@ -5,12 +5,12 @@
 """Test mempool limiting together/eviction with the wallet."""
 
 from decimal import Decimal
+from test_framework.blocktools import COINBASE_MATURITY
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal, assert_greater_than, assert_raises_rpc_error, gen_return_txouts
 from test_framework.wallet import MiniWallet
 from test_framework.messages import CTransaction, from_hex
-import pdb
 
 class MempoolLimitTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -25,6 +25,7 @@ class MempoolLimitTest(BitcoinTestFramework):
 
     def run_test(self):
         txouts = gen_return_txouts()
+
         node = self.nodes[0]
         miniwallet = MiniWallet(node)
         relayfee = node.getnetworkinfo()['relayfee']
@@ -35,10 +36,10 @@ class MempoolLimitTest(BitcoinTestFramework):
 
         txids=[]
         miniwallet.generate(92)
-        node.generate(100)
+        node.generate(COINBASE_MATURITY+1)
 
         self.log.info('Create a mempool tx that will be evicted')
-        txid = miniwallet.send_self_transfer(fee_rate = relayfee, from_node = node)['txid']
+        tx_to_be_evicted_id = miniwallet.send_self_transfer(fee_rate = relayfee, from_node = node)['txid']
 
         base_fee = relayfee*1000
         for i in range (3):
@@ -47,7 +48,7 @@ class MempoolLimitTest(BitcoinTestFramework):
 
         self.log.info('The tx should be evicted by now')
         assert_greater_than(len([txid for batch in txids for txid in batch]), len(node.getrawmempool()))
-        assert txid not in node.getrawmempool() # check txid in the raw mempool
+        assert tx_to_be_evicted_id not in node.getrawmempool() # check txid in the raw mempool
 
         self.log.info('Check that mempoolminfee is larger than minrelytxfee')
         assert_equal(node.getmempoolinfo()['minrelaytxfee'], Decimal('0.00001000'))
@@ -59,14 +60,14 @@ class MempoolLimitTest(BitcoinTestFramework):
     def create_large_transactions(self, node, txouts, miniwallet, num, fee):
         large_txids = []
         for _ in range(num):
-            hex = miniwallet.create_self_transfer(from_node=node, fee_rate=fee)['hex']
-            tx = from_hex(CTransaction(), hex)
-            tx.vout.extend(txouts)
-            tx_hex = tx.serialize().hex()
+            tx = miniwallet.create_self_transfer(from_node=node, fee_rate=fee)
+            hex=tx['hex']
+            tx_instance = from_hex(CTransaction(), hex)
+            for txout in txouts:
+                tx_instance.vout.append(txout)
+            tx_hex = tx_instance.serialize().hex()
             miniwallet.sendrawtransaction(from_node=self.nodes[0], tx_hex=tx_hex)
-            for utxo in miniwallet.get_all_utxos():
-                large_txids.append(utxo)
-
+            large_txids.append(tx['txid'])
         return large_txids
 
 if __name__ == '__main__':
