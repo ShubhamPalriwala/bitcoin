@@ -16,6 +16,7 @@ from test_framework.messages import (
     CTxIn,
     CTxInWitness,
     CTxOut,
+    from_hex,
 )
 from test_framework.script import (
     CScript,
@@ -177,3 +178,21 @@ class MiniWallet:
     def sendrawtransaction(self, *, from_node, tx_hex):
         from_node.sendrawtransaction(tx_hex)
         self.scan_tx(from_node.decoderawtransaction(tx_hex))
+
+    def create_large_transactions(
+        self, node, array_of_large_tx, no_of_tx_ids, fee_rate
+    ):
+        # Create large transactions by appending txouts in vout
+        no_of_tx_created = 0
+        for _ in range(no_of_tx_ids):
+            # Create a self transfer here to get the tx details and then append the vout to increase the tx size
+            hex = self.create_self_transfer(from_node=node, fee_rate=fee_rate)['hex']
+            # Converts it into a CTransaction() instance to append the vouts
+            tx_instance = from_hex(CTransaction(), hex)
+            for txout in array_of_large_tx:
+                tx_instance.vout.append(txout)
+            tx_hex = tx_instance.serialize().hex()
+            # Serializes and sends the tx to the nodes
+            self.sendrawtransaction(from_node=node, tx_hex=tx_hex)
+            no_of_tx_created += 1
+        return no_of_tx_created
