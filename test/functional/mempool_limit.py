@@ -46,7 +46,7 @@ class MempoolLimitTest(BitcoinTestFramework):
         tx_to_be_evicted_id = miniwallet.send_self_transfer(from_node=node, fee_rate=relayfee)['txid']
 
         # Increase the tx fee rate massively now to give the next transactions a higher priority in the mempool
-        base_fee = relayfee * 1000
+        base_fee = relayfee*100
 
         self.log.info('Fill up the mempool with txs with higher fee rate')
         no_of_large_tx_created = 0
