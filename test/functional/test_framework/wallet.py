@@ -16,6 +16,7 @@ from test_framework.messages import (
     CTxIn,
     CTxInWitness,
     CTxOut,
+    from_hex,
 )
 from test_framework.script import (
     CScript,
@@ -34,7 +35,6 @@ from test_framework.util import (
 
 class MiniWalletMode(Enum):
     """Determines the transaction type the MiniWallet is creating and spending.
-
     For most purposes, the default mode ADDRESS_OP_TRUE should be sufficient;
     it simply uses a fixed bech32 P2WSH address whose coins are spent with a
     witness stack of OP_TRUE, i.e. following an anyone-can-spend policy.
@@ -42,7 +42,6 @@ class MiniWalletMode(Enum):
     scriptSig for testing opcodes that are activated by a soft-fork), or the txs
     should contain an actual signature, the raw modes RAW_OP_TRUE and RAW_P2PK
     can be useful. Summary of modes:
-
                     |      output       |           |  tx is   | can modify |  needs
          mode       |    description    |  address  | standard | scriptSig  | signing
     ----------------+-------------------+-----------+----------+------------+----------
@@ -117,10 +116,8 @@ class MiniWallet:
     def get_utxo(self, *, txid: Optional[str]='', mark_as_spent=True):
         """
         Returns a utxo and marks it as spent (pops it from the internal list)
-
         Args:
         txid: get the first utxo we find from a specific transaction
-
         Note: Can be used to get the change output immediately after a send_self_transfer
         """
         index = -1  # by default the last utxo
@@ -177,3 +174,22 @@ class MiniWallet:
     def sendrawtransaction(self, *, from_node, tx_hex):
         from_node.sendrawtransaction(tx_hex)
         self.scan_tx(from_node.decoderawtransaction(tx_hex))
+
+    def create_large_transactions(
+        self, node, array_of_large_tx, no_of_tx_ids, fee_rate
+    ):
+        # Create large transactions by appending txouts in vout
+        no_of_tx_created = 0
+        for _ in range(no_of_tx_ids):
+            # Create a self transfer here to get the tx details and then append the vout to increase the tx size
+            hex = self.create_self_transfer(from_node=node, fee_rate=fee_rate)['hex']
+            # Converts it into a CTransaction() instance to append the vouts
+            tx_instance = from_hex(CTransaction(), hex)
+            for txout in array_of_large_tx:
+                tx_instance.vout.append(txout)
+            tx_hex = tx_instance.serialize().hex()
+            # Serializes and sends the tx to the nodes
+            self.sendrawtransaction(from_node=node, tx_hex=tx_hex)
+            no_of_tx_created += 1
+        assert_equal(no_of_tx_created,no_of_tx_ids)
+        return no_of_tx_created
